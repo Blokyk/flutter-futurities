@@ -6,7 +6,7 @@ class DelayedFuture<T> with ChangeNotifier {
   final Create<Future<T>> create;
 
   ConnectionState state;
-  late Future<T> future;
+  Future<T>? future;
 
   T? data;
 
@@ -52,7 +52,7 @@ class DelayedFuture<T> with ChangeNotifier {
     // (2) only set the completion callback *after* we've set the state to [waiting], so
     //     we don't risk overwriting [done] with [waiting] and end up in that state forever
     //     (yes, some futures can complete before the next line of code, e.g. [SynchronousFuture])
-    future = future.then((val) {
+    future = future!.then((val) {
       _onFutureDone(val);
       return val;
     });
@@ -62,6 +62,13 @@ class DelayedFuture<T> with ChangeNotifier {
     data = val;
     state = ConnectionState.done;
     notifyListeners();
+  }
+
+  @override
+  void dispose() {
+    // make sure we don't emit any error after this has been disposed
+    future?.ignore();
+    super.dispose();
   }
 }
 
