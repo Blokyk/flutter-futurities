@@ -72,12 +72,16 @@ class DelayedFutureProvider<T> extends SingleChildStatelessWidget {
 
   final T Function(BuildContext, Object?)? catchError;
 
+  // widget builder function/callback for a SingleChildWidget
+  final TransitionBuilder? builder;
+
   const DelayedFutureProvider({
     super.key,
     required this.create,
     required this.initialValue,
     this.loadingValue,
     this.catchError,
+    this.builder,
     super.child,
   });
 
@@ -92,13 +96,18 @@ class DelayedFutureProvider<T> extends SingleChildStatelessWidget {
         var delayedFuture = context.watch<DelayedFuture<T>>();
         if (delayedFuture.isSleeping) {
           // if it hasn't started yet, just send the initial value
-          return Provider.value(value: initialValue, child: child);
+          return Provider.value(
+            value: initialValue,
+            builder: builder,
+            child: child,
+          );
         } else {
           // if we've already started, delegate the rest of the responsibility to FutureProvider
           return FutureProvider.value(
             value: delayedFuture.future,
             initialData: loadingValue ?? initialValue,
             catchError: catchError,
+            builder: builder,
             child: child,
           );
         }
