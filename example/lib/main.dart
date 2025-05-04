@@ -17,12 +17,7 @@ class MyApp extends StatelessWidget {
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
       ),
-      home: DelayedFutureProvider(
-        create: getMessage,
-        initialValue: "Not started yet...",
-        loadingValue: "Wisdom loading...",
-        child: MyHomePage(title: 'Flutter Demo Home Page'),
-      ),
+      home: MyHomePage(title: 'Futurities demo'),
     );
   }
 
@@ -33,6 +28,33 @@ class MyApp extends StatelessWidget {
     return Future.value(
       "Read 'How Do We Relationship' at least $_counter times!",
     );
+  }
+
+  static Future<String> getMessage2(BuildContext context) async {
+    print("fetching message2 ${_counter++}...");
+    await Future.delayed(Duration(seconds: 2));
+    return Future.value(
+      "Read 'Donuts under a crescent moon' at least $_counter times!",
+    );
+  }
+
+  static final _message3FieldController = TextEditingController();
+  static Future<String> getMessage3(BuildContext context) async {
+    print("fetching message from user");
+    return await showDialog(
+      context: context,
+      builder:
+          (context) => AlertDialog(
+            content: TextField(controller: _message3FieldController),
+            actions: [
+              ElevatedButton(
+                onPressed:
+                    () => Navigator.pop(context, _message3FieldController.text),
+                child: Text("Ok"),
+              ),
+            ],
+          ),
+    ); // null-check
   }
 }
 
@@ -63,47 +85,50 @@ class _MyHomePageState extends State<MyHomePage> {
     // The Flutter framework has been optimized to make rerunning build methods
     // fast, so that you can just rebuild anything that needs updating rather
     // than having to individually change instances of widgets.
-    return Scaffold(
-      appBar: AppBar(
-        // TRY THIS: Try changing the color here to a specific color (to
-        // Colors.amber, perhaps?) and trigger a hot reload to see the AppBar
-        // change color while the other colors stay the same.
-        backgroundColor: Theme.of(context).colorScheme.inversePrimary,
-        // Here we take the value from the MyHomePage object that was created by
-        // the App.build method, and use it to set our appbar title.
-        title: Text(widget.title),
-      ),
-      body: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: <Widget>[
-            DelayedFutureBuilder(
-              future: context.watch<DelayedFuture<String>>(),
-              onNone:
-                  (_) => Text(
-                    "Click the floating button for some wisdom!",
-                    style: Theme.of(context).textTheme.headlineMedium,
-                  ),
-              onWaiting: (_) => CircularProgressIndicator(),
-              onDone:
-                  (_, message) => Text(
-                    message,
-                    style: Theme.of(context).textTheme.headlineMedium,
-                  ),
+    return DelayedFutureProvider(
+      create: MyApp.getMessage3,
+      initialValue: "Not started yet...",
+      loadingValue: "Wisdom loading...",
+      catchError: (_, e) => e.toString(),
+      builder:
+          (context, _) => Scaffold(
+            appBar: AppBar(
+              backgroundColor: Theme.of(context).colorScheme.inversePrimary,
+              title: Text(widget.title),
             ),
-            Text("Live state: ${context.watch<DelayedFuture<String>>().state}"),
-          ],
-        ),
-      ),
-      floatingActionButton: FloatingActionButton(
-        onPressed:
-            () => context.read<DelayedFuture<String>>().start(
-              context,
-              allowRestarts: true,
+            body: Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: <Widget>[
+                  DelayedFutureBuilder<String>(
+                    onNone:
+                        (_) => Text(
+                          "Click the floating button for some wisdom!",
+                          style: Theme.of(context).textTheme.headlineMedium,
+                        ),
+                    onWaiting: (_) => CircularProgressIndicator(),
+                    onDone:
+                        (_, message) => Text(
+                          message,
+                          style: Theme.of(context).textTheme.headlineMedium,
+                        ),
+                  ),
+                  Text(
+                    "Live state: ${context.watch<DelayedFuture<String>>().state}",
+                  ),
+                ],
+              ),
             ),
-        tooltip: 'Increment',
-        child: const Icon(Icons.add),
-      ),
+            floatingActionButton: FloatingActionButton(
+              onPressed:
+                  () => context.read<DelayedFuture<String>>().start(
+                    context,
+                    allowRestarts: true,
+                  ),
+              tooltip: 'Increment',
+              child: const Icon(Icons.add),
+            ),
+          ),
     );
   }
 }

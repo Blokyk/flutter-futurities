@@ -4,6 +4,8 @@ import 'package:flutter/widgets.dart';
 import 'package:provider/provider.dart';
 import 'package:provider/single_child_widget.dart';
 
+typedef FutureErrorHandler<T> = FutureOr<T> Function<E>(E, StackTrace)?;
+
 class DelayedFuture<T> with ChangeNotifier {
   Create<Future<T>> create;
 
@@ -16,14 +18,17 @@ class DelayedFuture<T> with ChangeNotifier {
   bool get isWaiting => state == ConnectionState.waiting;
   bool get isDone => state == ConnectionState.done;
 
-  DelayedFuture({required this.create}) : state = ConnectionState.none;
+  FutureErrorHandler<T> onError;
 
-  DelayedFuture.started({required Future<T> value})
+  DelayedFuture({required this.create, this.onError})
+    : state = ConnectionState.none;
+
+  DelayedFuture.started({required Future<T> value, this.onError})
     : state = ConnectionState.waiting,
       future = value,
       create = ((_) => value);
 
-  DelayedFuture.done({required FutureOr<T> value})
+  DelayedFuture.done({required FutureOr<T> value, this.onError})
     : state = ConnectionState.done,
       future = Future.value(value),
       create = ((_) => Future.value(value));
@@ -46,22 +51,21 @@ class DelayedFuture<T> with ChangeNotifier {
     // to avoid data races, in two ways:
     //
     // (1) assign `future` before [notifyListeners], so that listeners can do whatever
-    //     they want with the future (e.g. await it, add callbacks, etc.)
-    future = create(context);
+    //     they want with the future (e.g. await it, add callbacks, etc.), and make
+    //     sure to immediately set the error handler
+    future = create(context).then((val) => (data = val), onError: onError);
     state = ConnectionState.waiting;
     notifyListeners();
 
     // (2) only set the completion callback *after* we've set the state to [waiting], so
     //     we don't risk overwriting [done] with [waiting] and end up in that state forever
-    //     (yes, some futures can complete before the next line of code, e.g. [SynchronousFuture])
-    future = future!.then((val) {
-      _onFutureDone(val);
-      return val;
-    });
+    //     (yes, some futures can complete before the next line of code, e.g. [SynchronousFuture]
+    //     or [Future.microtask]s)
+    future = future!.whenComplete(_onFutureDone);
   }
 
-  void _onFutureDone(T val) {
-    data = val;
+  void _onFutureDone() {
+    // data = val;
     state = ConnectionState.done;
     notifyListeners();
   }
@@ -103,9 +107,16 @@ class _DelayedFutureProviderState<T>
     extends SingleChildState<DelayedFutureProvider<T>> {
   late DelayedFuture<T> future;
 
+  static FutureErrorHandler<T> _wrapCatchError<T>(
+    T Function(BuildContext, Object?)? catchError,
+  ) {}
+
   @override
   void initState() {
-    future = DelayedFuture(create: widget.create);
+    future = DelayedFuture(
+      create: widget.create,
+      onError: _wrapCatchError(widget.catchError),
+    );
     super.initState();
   }
 
@@ -124,6 +135,7 @@ class _DelayedFutureProviderState<T>
     //       notifying its listeners, including the UI (through both the
     //       [ChangeNotifierProvider] and the [FutureProvider])
     future.create = widget.create;
+    future.onError = _wrapCatchError(widget.catchError);
     super.didUpdateWidget(oldWidget);
   }
 
@@ -146,6 +158,7 @@ class _DelayedFutureProviderState<T>
           return FutureProvider.value(
             value: delayedFuture.future,
             initialData: widget.loadingValue ?? widget.initialValue,
+            catchError: widget.catchError,
             builder: widget.builder,
             child: child,
           );
@@ -156,22 +169,24 @@ class _DelayedFutureProviderState<T>
 }
 
 class DelayedFutureBuilder<T> extends StatelessWidget {
-  final DelayedFuture<T> future;
+  final DelayedFuture<T>? future;
 
   final WidgetBuilder onNone, onWaiting;
   final Widget Function(BuildContext context, T data) onDone;
+  final Widget Function(BuildContext context, Object err)? onError;
 
   const DelayedFutureBuilder({
     super.key,
-    required this.future,
+    this.future,
     required this.onNone,
     required this.onWaiting,
     required this.onDone,
+    this.onError,
   });
 
   DelayedFutureBuilder.builder({
     super.key,
-    required this.future,
+    this.future,
     required AsyncWidgetBuilder<T> builder,
   }) : onNone = ((ctx) => builder(ctx, AsyncSnapshot.nothing())),
        onWaiting = ((ctx) => builder(ctx, AsyncSnapshot.waiting())),
@@ -179,10 +194,16 @@ class DelayedFutureBuilder<T> extends StatelessWidget {
            ((ctx, data) => builder(
              ctx,
              AsyncSnapshot.withData(ConnectionState.done, data),
+           )),
+       onError =
+           ((ctx, err) => builder(
+             ctx,
+             AsyncSnapshot.withError(ConnectionState.done, err),
            ));
 
   @override
   Widget build(BuildContext context) {
+    var future = this.future ?? context.watch<DelayedFuture<T>>();
     return switch (future.state) {
       ConnectionState.none => onNone(context),
       ConnectionState.waiting => onWaiting(context),
