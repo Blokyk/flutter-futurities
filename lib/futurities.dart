@@ -66,25 +66,27 @@ class DelayedFuture<T> with ChangeNotifier {
 }
 
 class DelayedFutureProvider<T> extends SingleChildStatelessWidget {
-  final DelayedFuture<T> future;
+  final Create<Future<T>> create;
   final T initialValue;
   final T? loadingValue;
 
   final T Function(BuildContext, Object?)? catchError;
 
-  DelayedFutureProvider({
+  const DelayedFutureProvider({
     super.key,
-    required Create<Future<T>> create,
+    required this.create,
     required this.initialValue,
     this.loadingValue,
     this.catchError,
     super.child,
-  }) : future = DelayedFuture(create: create);
+  });
 
   @override
   Widget buildWithChild(BuildContext context, Widget? child) {
-    return ChangeNotifierProvider.value(
-      value: future,
+    return ChangeNotifierProvider(
+      // using [create] instead of [.value] fixes hot reload somehow??
+      // man i really don't understand this stuff ;-;
+      create: (_) => DelayedFuture(create: create),
       child: child,
       builder: (context, child) {
         var delayedFuture = context.watch<DelayedFuture<T>>();
