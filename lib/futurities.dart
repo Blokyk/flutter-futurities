@@ -95,8 +95,8 @@ class DelayedFutureProvider<T> extends SingleChildStatelessWidget {
   @override
   Widget buildWithChild(BuildContext context, Widget? child) {
     return ChangeNotifierProvider(
-      // using [create] instead of [.value] fixes hot reload somehow??
-      // man i really don't understand this stuff ;-;
+      // we use the [create] version here because that'll create a separate state to store
+      // the `DelayedFuture` in, which *won't* be reset on hot reload
       create: (_) => DelayedFuture(create: create),
       child: child,
       builder: (context, child) {
